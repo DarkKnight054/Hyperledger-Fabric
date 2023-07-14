@@ -1,86 +1,48 @@
-# Hyperledger Fabric Test Network
+# Deploying a smart contract to a channel
 
-<h2>N.B: Contents in this repository have been gained or taken from hyperledger fabric official documentation </h2>
+<h2>N.B: Contents are taken from hyperledger fabric official documentation</h2>
 
-### Configuaration of Test-Net
+### Tracking the logs (OPTIONAL)
 
-- It includes two peer organizations and an ordering organization.
-- For simplicity, a single node Raft ordering service is configured.
-- To reduce complexity, a TLS Certificate Authority (CA) is not deployed. All certificates are issued by the root CAs.
-- The sample network deploys a Fabric network with <b>Docker Compose. Because the nodes are isolated within a Docker Compose network, the test network is not configured to connect to other running Fabric nodes.</b>
+- uses Logspout tool.
+- Command - ./monitordocker.sh fabric_test
+- Recommend to use it in another terminal to track the whole process while we'll deploy chaincode and smart contracts
 
-### Bring up the test network
+### Package the smart contract
 
-Script - network.sh , PWD - fabric-samples/test-network
+- We need to package the chaincode before it can be installed on our peers. The steps are different if you want to install a smart contract written in Go, JavaScript, or Typescript. Here, I'll use javascript as chaincode language.
 
-- Up the test net using the command <span style="color: green">./network.sh up</span>
-- Down the test net using the command <span style="color: red">./network.sh down</span>
+#### Some keynotes about some libraries
 
-<b style="color: orange">Key Notes</b>
+- The fabric-contract-api provides the contract interface. a high level API for application developers to implement Smart Contracts. Within Hyperledger Fabric, Smart Contracts are also known as Chaincode. Working with this API provides a high level entry point to writing business logic.
 
-- The <span style="color: green">network.sh</span> script creates all of the cryptographic material that is required to deploy and operate the network before it creates the peer and ordering nodes.
+- The fabric-shim provides the chaincode interface, a lower level API for implementing "Smart Contracts". It also provides the implementation to support communication with Hyperledger Fabric peers for Smart Contracts written using the fabric-contract-api together with the fabric-chaincode-node cli to launch Chaincode or Smart Contracts.
 
-- By default, the script uses the cryptogen tool to create the certificates and keys. The tool is provided for development and testing.
+- To confirm that the fabric-shim maintains API and functional compatibility with previous versions of Hyperledger Fabric.
 
-- For Production, its better to bring up the network using CA(Certificate authority)
+## Work flow of deploying a smart contract to a channel
 
-### Create a Channel
+<ol>
 
-command - <span style="color: green">./network.sh createChannel -c <Channel_Name> </span>
+<li>At first, chaincode need to be packaged before it can be installed on peers</li>
 
-- Replace <Channel_Name> with the channel name.
-- Channel Name contains only lower case ASCII alphanumerics, dots ‘.’, and dashes ‘-‘
-- Channel Name is shorter than 250 characters
-- Channel Name starts with a letter
+<li>Install the chaincode package on different peers</li>
 
-### Start a ChainCode on the channel
+<li>Approve chaincode definition from majority of the org in the network.
 
-command - <span style="color: green">./network.sh deployCC -c <Channel_Name> -ccn <Chaincode_Name> -ccp <Chaincode_Path> -ccl <Chaincode_Language> </span>
+<h4>Remember</h4>
 
-### Interacting with the network
+- <h5>majority of the org need to approve chaincode definition</h5>
 
-- <h3>Make sure you're in fabric-samples/test-network directory</h3>
-  <h3>Run these command for running the CLI as peer of org1</h3>
+- <h5>Orgs those didn't approve the chaincode can't endorse a transaction through this chaincode</h5>
 
-- export PATH=${PWD}/../bin:$PATH **(Redirecting to binaries folder of test-network)**
-- export FABRIC_CFG_PATH=$PWD/../config/ **(Use for configuring peer of org)**
+- <h5>approval must be committed by admin of that org not client user</h5>
+  </li>
 
-#### Make Peer CLI for org1
+<li>Committing the chaincode definition to the channel</li>
 
-<h4>Environment Variables for org1</h4>
+<li>Invoking the chaincode <b>(Note that the invoke command needs to target a sufficient number of peers to meet the chaincode endorsement policy.)</b></li>
 
-- export CORE_PEER_TLS_ENABLED=true
-- export CORE_PEER_LOCALMSPID="Org1MSP"
-- export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
-- export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
-- export CORE_PEER_ADDRESS=localhost:7051
+<li><b>(Optional)</b> Chaincode can be upgraded too.</li>
 
-#### Make Peer CLI for org2
-
-<h4>Environment Variables for org2</h4>
-
-- export CORE_PEER_TLS_ENABLED=true
-- export CORE_PEER_LOCALMSPID="Org2MSP"
-- export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
-- export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
-- export CORE_PEER_ADDRESS=localhost:9051
-
-### Initialize ledger
-
-<h4>Here, peer0 of org1 initialize the ledger with initledger function decribed in <span style="color: yellow">asset-transfer-basic/chaincode/javasrcipt/lib/assetTransfer.js</span> file</h4>
-
-**Initialize Chaincode**
-
-- peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C <Channel_Name> -n <Chaincode_Name> --peerAddresses localhost:7051 --tlsRootCertFiles "${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt" --peerAddresses localhost:9051 --tlsRootCertFiles "${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt" -c '{"function":"InitLedger","Args":[]}'
-
-**Get all the asset**
-
-- peer chaincode query -C <Channel_Name> -n <Chaincode_Name> -c '{"Args":["GetAllAssets"]}'
-
-**Transfer Ownership of an asset**
-
-- peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C <Channel_Name> -n <Chaincode_Name> --peerAddresses localhost:7051 --tlsRootCertFiles "${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt" --peerAddresses localhost:9051 --tlsRootCertFiles "${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt" -c '{"function":"TransferAsset","Args":["asset6","Christopher"]}'
-
-**Read Data of an specific asset**
-
-- peer chaincode query -C <Channel_Name> -n <Chaincode_Name> -c '{"Args":["ReadAsset","asset6"]}'
+</ol>
